@@ -4,8 +4,8 @@
 # Basic file backup script written in python.                   #
 #                                                               #
 # Author: Marcus Uddenhed                                       #
-# Version: 1.5.1                                                #
-# Date: 2024-04-10                                              #
+# Version: 1.5.2                                                #
+# Date: 2025-05-21                                              #
 # Requirements:                                                 #
 # pysftp for SFTP functions, only if vSendToSftp is set to yes. #
 #                                                               #
@@ -15,7 +15,7 @@
 vBckDir: str = ""                      # Backup and temp folder to use during creation of compressed file or to store files locally.
 vFilePrefix: str = ""                  # Name prefix of compressed file, _date and .zip is added at the end, ex. prefix_date.zip.
 vKeepBackup: str = "no"                # Keep local backup files after sent to SFTP server, if no than nothing is kept locally.(no/yes)
-vKeepDays: int = "20"                  # Days to keep if you want to keep certain days locally, relies on vKeepBackup.
+vKeepDays: str = "20"                  # Days to keep if you want to keep certain days locally, relies on vKeepBackup.
 vSendToSftp: str = "no"                # Should we send the file to a Sftp server.(no/yes)
 vSftpUser: str = ""                    # User for remote server, used both with password or key file.
 vSftpPass: str = ""                    # Password for remote server.
@@ -23,7 +23,7 @@ vSftpUseKey: str = "no"                # Use key file as authenticator against r
 vSftpKeyFile: str = ""                 # Full path and key to use when connecting via key file instead of username/password.
 vSftpDir: str = ""                     # Destination folder on remote server.
 vSftpHost: str = ""                    # Remote server address.
-vSftpPort: int = "22"                  # Remote server port.
+vSftpPort: str = "22"                  # Remote server port.
 vPreBckCmd: str = "no"                 # Run extra OS specific commands before backup/zip.(no/yes)
 vPostBckCmd: str = "no"                # Run extra OS specific commands after backup/zip.(no/yes)
 
@@ -42,10 +42,6 @@ vPostOsCmd: list = [""]
 from datetime import datetime
 from time import time
 import zipfile
-import os## Module imports.
-from datetime import datetime
-from time import time
-import zipfile
 import os
 
 #### Script Action
@@ -59,7 +55,7 @@ if vPreBckCmd == "yes" or vPostBckCmd == "yes":
   import subprocess
 
 ## Get current date
-def funcDateString() -> datetime:
+def funcDateString() -> str:
   # Returns the today string year, month, day.
   return datetime.now().strftime("%Y%m%d")
 
@@ -69,7 +65,7 @@ def funcExecutePreOsCmd(vPreOsCmd: list) -> None:
     if vPreBckCmd.casefold() == "yes":
       # iterate through each specified command.
       for vExecute in vPreOsCmd:
-        subprocess.run(vExecute, shell=True, check=True)
+        subprocess.run(vExecute, shell=True, check=True) # type: ignore
       # Send info to console.
       print("OS commands has been executed...")
   except:
@@ -82,7 +78,7 @@ def funcExecutePostOsCmd(vPostOsCmd: list) -> None:
     if vPostBckCmd.casefold() == "yes":
       # iterate through each specified command.
       for vExecute in vPostOsCmd:
-        subprocess.run(vExecute, shell=True, check=True)
+        subprocess.run(vExecute, shell=True, check=True) # type: ignore
       # Send info to console.
       print("OS commands has been executed...")
   except:
@@ -93,12 +89,12 @@ def funcExecutePostOsCmd(vPostOsCmd: list) -> None:
 vSetZipFile: str = os.path.join(vBckDir, vFilePrefix + "_" + funcDateString() + ".zip")
 
 ## Define function for compressing files/folders into a zip file.
-def funcCreateZipFile(vZipName: str, vPath: str) -> None:
+def funcCreateZipFile(vZipName: str, vPath: list[str]) -> None:
   try:
     # Send info to console.
     print("Creating Zip file...")
     # Parameters: vZipName - name of the zip file; path - name of folder/file to be put in zip file.
-    vZipFile: str = zipfile.ZipFile(vZipName, 'w', zipfile.ZIP_DEFLATED)
+    vZipFile: object = zipfile.ZipFile(vZipName, 'w', zipfile.ZIP_DEFLATED)
     # iterate through each specified folder.
     for vFolder in vPath:
       # Changes root dir to given input folder to make zipped files relative to that.
@@ -126,27 +122,27 @@ def funcSendToSftp(vFile: str) -> None:
       # Check connection parameters and build connection string.
       if vSftpUseKey.lower() == "yes":
         # Connect to SFTP with key fil and upload file.
-        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, private_key=vSftpKeyFile) as sftp:
+        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, private_key=vSftpKeyFile) as sftp: # type: ignore
           # Change directory.
           with sftp.cd(vSftpDir):
             # Upload file
             sftp.put(vFile)
       elif vSftpUseKey.lower() == "no":
         # Connect to SFTP with username/password and upload file.
-        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, password=vSftpPass) as sftp:
+        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, password=vSftpPass) as sftp: # type: ignore
           # Change directory.
           with sftp.cd(vSftpDir):
             # Upload file
             sftp.put(vFile)
-    # Send info to console.
-    print("Uploaded: ", vFile)
-    print("Done sending Zip file to SFTP server...")
+      # Send info to console.
+      print("Uploaded: ", vFile)
+      print("Done sending Zip file to SFTP server...")
   except:
       # Send info to console.
       print("Could not connect to server or upload file...")
 
 ## Define history function.
-def funcKeepBackup(vGetDays: int, vGetDir: str) -> None:
+def funcKeepBackup(vGetDays: str, vGetDir: str) -> None:
   try:
     # Check if to keep a history or not.
     vIntDays: int = int(vGetDays)
@@ -154,7 +150,7 @@ def funcKeepBackup(vGetDays: int, vGetDir: str) -> None:
       # Send info to console.
       print("Pruning backup folder, keeping", vIntDays, "days...")
       # Set today as current day.
-      vTimeNow: int = time()
+      vTimeNow: int = int(time())
       # Remove files based on days to keep.
       for fname in os.listdir(vGetDir):
         if fname.startswith(vFilePrefix):
@@ -163,15 +159,25 @@ def funcKeepBackup(vGetDays: int, vGetDir: str) -> None:
       # Send info to console.
       print("Done pruning backup folder...")
     elif vKeepBackup.casefold() == "no":
-      # Send info to console.
-      print("Removing all local backup files...")
-      # Build file list and remove files.
-      vSetFilePattern: str = os.path.join(vFilePrefix + "_")
-      for fname in os.listdir(vGetDir):
-        if fname.startswith(vSetFilePattern):
-          os.remove(os.path.join(vGetDir, fname))
-    # Send info to console.
-    print("Done removing all local backup files...")
+      # Check if we are sending them to remote location.
+      if vSendToSftp.casefold() == "no":
+        print("WARNING!!")
+        print("---------")
+        print("removing all local files without sending them to SFTP defeats the purpose of this script.")
+        print("Either send to remote location or use pruning to keep set amount of local backups")
+        print("Will not remove backup file(s)...")
+        print("---------")
+        exit(0)
+      elif vSendToSftp.casefold() == "yes":
+        # Send info to console.
+        print("Removing all local backup files...")
+        # Build file list and remove files.
+        vSetFilePattern: str = os.path.join(vFilePrefix + "_")
+        for fname in os.listdir(vGetDir):
+          if fname.startswith(vSetFilePattern):
+            os.remove(os.path.join(vGetDir, fname))
+        # Send info to console.
+        print("Done removing all local backup files...")
   except:
     # Send info to console.
     print("Could not clean backup folder...")
