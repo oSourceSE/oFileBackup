@@ -1,15 +1,15 @@
 #!/usr/bin/python3
 
-#################################################################
-# Basic file backup script written in python.                   #
-#                                                               #
-# Author: Marcus Uddenhed                                       #
-# Version: 1.5.2                                                #
-# Date: 2025-05-21                                              #
-# Requirements:                                                 #
-# pysftp for SFTP functions, only if vSendToSftp is set to yes. #
-#                                                               #
-#################################################################
+###################################################################
+# Basic file backup script written in python.                     #
+#                                                                 #
+# Author: Marcus Uddenhed                                         #
+# Version: 1.6.0                                                  #
+# Date: 2025-10-02                                                #
+# Requirements:                                                   #
+# paramiko for SFTP functions, only if vSendToSftp is set to yes. #
+#                                                                 #
+###################################################################
 
 ## Global variables.
 vBckDir: str = ""                      # Backup and temp folder to use during creation of compressed file or to store files locally.
@@ -48,18 +48,18 @@ import os
 
 ## Import pysftp only if vSendToSftp set to yes.
 if vSendToSftp == "yes":
-  import pysftp
+  import paramiko
 
 ## Import subprocess only if vPreBckCmd or vPostBckCmd set to yes.
 if vPreBckCmd == "yes" or vPostBckCmd == "yes":
   import subprocess
 
-## Get current date
+## Define function - Get current date
 def funcDateString() -> str:
   # Returns the today string year, month, day.
   return datetime.now().strftime("%Y%m%d")
 
-## Define function for Pre OS commands.
+## Define function - Pre OS commands.
 def funcExecutePreOsCmd(vPreOsCmd: list) -> None:
   try:
     if vPreBckCmd.casefold() == "yes":
@@ -68,11 +68,13 @@ def funcExecutePreOsCmd(vPreOsCmd: list) -> None:
         subprocess.run(vExecute, shell=True, check=True) # type: ignore
       # Send info to console.
       print("OS commands has been executed...")
-  except:
-    # Send info to console.
+  except Exception as vErr:
+    # Send info to console and exit.
     print("Could not execute OS command...")
+    print(vErr)
+    exit(1)
 
-## Define function for Pre OS commands.
+## Define function - Post OS commands.
 def funcExecutePostOsCmd(vPostOsCmd: list) -> None:
   try:
     if vPostBckCmd.casefold() == "yes":
@@ -81,14 +83,17 @@ def funcExecutePostOsCmd(vPostOsCmd: list) -> None:
         subprocess.run(vExecute, shell=True, check=True) # type: ignore
       # Send info to console.
       print("OS commands has been executed...")
-  except:
-    # Send info to console.
+  except Exception as vErr:
+    # Send info to console and exit.
     print("Could not execute OS command...")
+    print(vErr)
+    exit(1)
 
-## Build Zip filename with path.
-vSetZipFile: str = os.path.join(vBckDir, vFilePrefix + "_" + funcDateString() + ".zip")
+## Build Zip filename with path and without full path.
+vSetZipFileName: str = vFilePrefix + "_" + funcDateString() + ".zip"
+vSetZipFileFullPath: str = os.path.join(vBckDir, vSetZipFileName)
 
-## Define function for compressing files/folders into a zip file.
+## Define function - Compressing files/folders into a zip file.
 def funcCreateZipFile(vZipName: str, vPath: list[str]) -> None:
   try:
     # Send info to console.
@@ -107,41 +112,76 @@ def funcCreateZipFile(vZipName: str, vPath: list[str]) -> None:
     vZipFile.close()
     # Send info to console.
     print("Zip file has been created...")
-  except:
-    # Send info to console.
+  except Exception as vErr:
+    # Send info to console and exit.
     print("Could not create Zip file...")
+    print(vErr)
+    exit(1)
 
-## Define function send to SFTP.
-def funcSendToSftp(vFile: str) -> None:
+## Define function - Connect to SFTP.
+def funcSftpConnect() -> None:
   try:
-    if vSendToSftp.casefold() == "yes":
-      # Send info to console.
-      print("Sending Zip file to SFTP server...")
-      # Convert port to integer, needed since we use "" above to keep it a bit more tidy.
-      vIntPort: int = int(vSftpPort)
-      # Check connection parameters and build connection string.
-      if vSftpUseKey.lower() == "yes":
-        # Connect to SFTP with key fil and upload file.
-        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, private_key=vSftpKeyFile) as sftp: # type: ignore
-          # Change directory.
-          with sftp.cd(vSftpDir):
-            # Upload file
-            sftp.put(vFile)
-      elif vSftpUseKey.lower() == "no":
-        # Connect to SFTP with username/password and upload file.
-        with pysftp.Connection(host=vSftpHost, port=vIntPort, username=vSftpUser, password=vSftpPass) as sftp: # type: ignore
-          # Change directory.
-          with sftp.cd(vSftpDir):
-            # Upload file
-            sftp.put(vFile)
-      # Send info to console.
-      print("Uploaded: ", vFile)
-      print("Done sending Zip file to SFTP server...")
-  except:
-      # Send info to console.
-      print("Could not connect to server or upload file...")
+    global vScpClient
+    vScpClient = paramiko.SSHClient() # type: ignore
+    vScpClient.load_system_host_keys()
+    vInputPortInt: int = int(vSftpPort)
+    # Check if to ask for username & password or to use keyfile.
+    if vSftpUseKey.lower() == "no":
+      print('Entering Username & Password for remote server...')
+      vScpClient.connect(vSftpHost, port=vInputPortInt, username=vSftpUser, password=vSftpPass)
+    elif vSftpUseKey.lower() == "yes":
+      # Get KeyFile.
+      vKeyFile: str = paramiko.RSAKey.from_private_key_file(vSftpKeyFile) # type: ignore
+      # Check if username is entered, if yes combine with key file, else use only key file.
+      if vSftpUser != "":
+        print('Using Username & KeyFile to connect to remote server...')
+        vScpClient.connect(vSftpHost, port=vInputPortInt, username=vSftpUser, pkey=vKeyFile, look_for_keys=False) # type: ignore
+      else:
+        print('Using KeyFile to connect to remote server...')
+        vScpClient.connect(vSftpHost, port=vInputPortInt, pkey=vKeyFile, look_for_keys=False) # type: ignore
+    # Open connection
+    global vScpConn
+    vScpConn = vScpClient.open_sftp()
+    print('Connected to SFTP...')
+  except Exception as vErr:
+    # Send info to console and exit.
+    print('Cannot connect to remote server, exiting...')
+    print(vErr)
+    exit(1)
 
-## Define history function.
+## Define function - Send to SFTP.
+def funcSendToSftp() -> None: #vShowMsg: str) -> None:
+  try:
+    # Open SFTP connection.
+    funcSftpConnect()
+    # Send file.
+    print('Sending file: ' + vSetZipFileName + ' To ' + vSftpDir + ' folder...')
+    vScpConn.chdir(vSftpDir)
+    vScpConn.put(vSetZipFileFullPath, vSetZipFileName)
+    print('Sent Ok...')
+    # Close SFTP connection.
+    funcSftpClose()
+  except Exception as vErr:
+    print('Could not send file...')
+    # Close SFTP Connection.
+    funcSftpClose()
+    # Send info to console and exit.
+    print(vErr)
+    exit(1)
+
+## Define function - Close SFTP connection.
+def funcSftpClose() -> None:
+  try:
+    # Close active session if any.
+    print("Closing remote session...")
+    vScpConn.close()
+    print("Remote session closed...")
+  except Exception as vErr:
+    # Send info to console and exit.
+    print(vErr)
+    exit(1)
+
+## Define function - Keep history.
 def funcKeepBackup(vGetDays: str, vGetDir: str) -> None:
   try:
     # Check if to keep a history or not.
@@ -178,18 +218,22 @@ def funcKeepBackup(vGetDays: str, vGetDir: str) -> None:
             os.remove(os.path.join(vGetDir, fname))
         # Send info to console.
         print("Done removing all local backup files...")
-  except:
-    # Send info to console.
+  except Exception as vErr:
+    # Send info to console and exit.
     print("Could not clean backup folder...")
+    print(vErr)
+    exit(1)
+
+#### Execute functions ####
 
 ## Call the pre OS command function and run only if vPreBckCmd is set to yes.
 funcExecutePreOsCmd(vPreOsCmd)
 
 ## Call the backup function and create the backup.
-funcCreateZipFile(vSetZipFile, vSrcDir)
+funcCreateZipFile(vSetZipFileFullPath, vSrcDir)
 
-## Call the Sftp function and upload file only if vSendToSftp is set to yes.
-funcSendToSftp(vSetZipFile)
+## Call the Sftp functions and upload file only if vSendToSftp is set to yes.
+funcSendToSftp()
 
 ## Call the post OS command function and run only if vPostBckCmd is set to yes.
 funcExecutePostOsCmd(vPostOsCmd)
