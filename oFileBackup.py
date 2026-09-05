@@ -4,8 +4,8 @@
 # Basic file backup script written in python.                     #
 #                                                                 #
 # Author: Marcus Uddenhed                                         #
-# Version: 1.6.1                                                  #
-# Date: 2026-08-25                                                #
+# Version: 1.6.2                                                  #
+# Date: 2026-09-05                                                #
 # Requirements:                                                   #
 # paramiko for SFTP functions, only if vSendToSftp is set to yes. #
 #                                                                 #
@@ -24,6 +24,7 @@ vSftpKeyFile: str = ""                 # Full path and key to use when connectin
 vSftpDir: str = ""                     # Destination folder on remote server.
 vSftpHost: str = ""                    # Remote server address.
 vSftpPort: str = "22"                  # Remote server port.
+vSftpTimeout: str = "0"                # Set SFTP timeout before failing, 0 sets it to None.
 vPreBckCmd: str = "no"                 # Run extra OS specific commands before backup/zip.(no/yes)
 vPostBckCmd: str = "no"                # Run extra OS specific commands after backup/zip.(no/yes)
 
@@ -43,6 +44,10 @@ from datetime import datetime
 from time import time
 import zipfile
 import os
+
+# Convert to int to keep it tidy in user parameters.
+vKeepDaysInt = int(vKeepDays)
+vSftpPortInt = int(vSftpPort)
 
 #### Script Action
 
@@ -124,21 +129,30 @@ def funcSftpConnect() -> None:
     global vScpClient
     vScpClient = paramiko.SSHClient() # type: ignore
     vScpClient.load_system_host_keys()
-    vInputPortInt: int = int(vSftpPort)
+    vSetTimeout: int = int(vSftpTimeout)
     # Check if to ask for username & password or to use keyfile.
     if vSftpUseKey.lower() == "no":
       print('Entering Username & Password for remote server...')
-      vScpClient.connect(vSftpHost, port=vInputPortInt, username=vSftpUser, password=vSftpPass)
+      if vSetTimeout == 0:
+        vScpClient.connect(vSftpHost, port=vSftpPortInt, username=vSftpUser, password=vSftpPass, timeout=None)
+      else:
+        vScpClient.connect(vSftpHost, port=vSftpPortInt, username=vSftpUser, password=vSftpPass, timeout=vSetTimeout)
     elif vSftpUseKey.lower() == "yes":
       # Get KeyFile.
       vKeyFile = paramiko.PKey.from_path(vSftpKeyFile) # type: ignore
       # Check if username is entered, if yes combine with key file, else use only key file.
       if vSftpUser != "":
         print('Using Username & KeyFile to connect to remote server...')
-        vScpClient.connect(vSftpHost, port=vInputPortInt, username=vSftpUser, pkey=vKeyFile, look_for_keys=False) # type: ignore
+        if vSetTimeout == 0:
+          vScpClient.connect(vSftpHost, port=vSftpPortInt, username=vSftpUser, pkey=vKeyFile, look_for_keys=False, timeout=None)
+        else:
+          vScpClient.connect(vSftpHost, port=vSftpPortInt, username=vSftpUser, pkey=vKeyFile, look_for_keys=False, timeout=vSetTimeout)
       else:
         print('Using KeyFile to connect to remote server...')
-        vScpClient.connect(vSftpHost, port=vInputPortInt, pkey=vKeyFile, look_for_keys=False) # type: ignore
+        if vSetTimeout == 0:
+          vScpClient.connect(vSftpHost, port=vSftpPortInt, pkey=vKeyFile, look_for_keys=False, timeout=None)
+        else:
+          vScpClient.connect(vSftpHost, port=vSftpPortInt, pkey=vKeyFile, look_for_keys=False, timeout=vSetTimeout)
     # Open connection
     global vScpConn
     vScpConn = vScpClient.open_sftp()
@@ -224,19 +238,26 @@ def funcKeepBackup(vGetDays: str, vGetDir: str) -> None:
     print(vErr)
     exit(1)
 
-#### Execute functions ####
+### Do the work ###
 
-## Call the pre OS command function and run only if vPreBckCmd is set to yes.
-funcExecutePreOsCmd(vPreOsCmd)
+### Function - Main
+def funcMain() -> None:
+  ## Call the pre OS command function and run only if vPreBckCmd is set to yes.
+  funcExecutePreOsCmd(vPreOsCmd)
 
-## Call the backup function and create the backup.
-funcCreateZipFile(vSetZipFileFullPath, vSrcDir)
+  ## Call the backup function and create the backup.
+  funcCreateZipFile(vSetZipFileFullPath, vSrcDir)
 
-## Call the Sftp functions and upload file only if vSendToSftp is set to yes.
-funcSendToSftp()
+  ## Call the Sftp functions and upload file only if vSendToSftp is set to yes.
+  if vSendToSftp.lower() == "yes":
+    funcSendToSftp()
 
-## Call the post OS command function and run only if vPostBckCmd is set to yes.
-funcExecutePostOsCmd(vPostOsCmd)
+  ## Call the post OS command function and run only if vPostBckCmd is set to yes.
+  funcExecutePostOsCmd(vPostOsCmd)
 
-## Call the history function to enable automatic housekeeping in the backup folder.
-funcKeepBackup(vKeepDays, vBckDir)
+  ## Call the history function to enable automatic housekeeping in the backup folder.
+  funcKeepBackup(vKeepDays, vBckDir)
+
+## Execute funcMain to Run the whole shebang....
+if __name__ == '__main__':
+    funcMain()
