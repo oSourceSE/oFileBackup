@@ -4,8 +4,8 @@
 # Basic file backup script written in python.                     #
 #                                                                 #
 # Author: Marcus Uddenhed                                         #
-# Version: 1.6.2                                                  #
-# Date: 2026-09-05                                                #
+# Version: 1.6.3                                                  #
+# Date: 2026-09-09                                                #
 # Requirements:                                                   #
 # paramiko for SFTP functions, only if vSendToSftp is set to yes. #
 #                                                                 #
@@ -51,7 +51,7 @@ vSftpPortInt = int(vSftpPort)
 
 #### Script Action
 
-## Import pysftp only if vSendToSftp set to yes.
+## Import paramiko only if vSendToSftp set to yes.
 if vSendToSftp.lower() == "yes":
   import paramiko
 
