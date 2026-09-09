@@ -41,7 +41,7 @@ Then run the following command, this will create a virtual environment just for 
 ```bash
 python3 -m venv .venv/oFileBackup
 ```
-When the `venv` is created, if you plan to send the backup to an `SFTP` server, the `paramiko` Python package is needed.
+When the `venv` is created, if you plan to send the backup to a `SFTP` server, the `paramiko` Python package is needed.
 
 To install it do the following.
 
